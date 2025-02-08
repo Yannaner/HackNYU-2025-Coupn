@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import base64
 from email import policy
 from email.parser import BytesParser
+from imageOCR import classify_words  # Import the classify_words function
 
 # Load environment variables from .env file
 load_dotenv()
@@ -51,9 +52,27 @@ def get_message_body(msg):
             body = ''
     return base64.urlsafe_b64decode(body).decode('utf-8')
 
-def get_newest_emails(service):
+def save_attachments(msg, store_dir):
+    if 'parts' in msg['payload']:
+        for part in msg['payload']['parts']:
+            if part['filename']:
+                if 'data' in part['body']:
+                    data = part['body']['data']
+                else:
+                    att_id = part['body']['attachmentId']
+                    att = service.users().messages().attachments().get(userId='me', messageId=msg['id'], id=att_id).execute()
+                    data = att['data']
+                file_data = base64.urlsafe_b64decode(data.encode('UTF-8'))
+                path = os.path.join(store_dir, part['filename'])
+                with open(path, 'wb') as f:
+                    f.write(file_data)
+                print(f'Saved attachment: {path}')
+                # Call classify_words on the saved image
+                if part['mimeType'].startswith('image/'):
+                    classify_words(path)
+
+def get_newest_emails(service, store_dir):
     results = service.users().messages().list(userId='me', maxResults=10).execute()
-    #q='category:promotions'
     messages = results.get('messages', [])
 
     if not messages:
@@ -63,7 +82,11 @@ def get_newest_emails(service):
             msg = service.users().messages().get(userId='me', id=message['id'], format='full').execute()
             msg_str = get_message_body(msg)
             print('Message: %s' % msg_str)
+            save_attachments(msg, store_dir)
 
 if __name__ == '__main__':
     service = get_service()
-    get_newest_emails(service)
+    store_dir = 'attachments'  # Directory to save attachments
+    if not os.path.exists(store_dir):
+        os.makedirs(store_dir)
+    get_newest_emails(service, store_dir)
