@@ -1,0 +1,8 @@
+{
+    "extends": ["next"],
+    "rules": {
+      "@next/next/*": "off",
+      "react/*": "off",
+      "react-hooks/*": "off"
+    }
+  }
