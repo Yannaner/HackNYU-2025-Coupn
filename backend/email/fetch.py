@@ -1,20 +1,24 @@
 import os
 import pickle
+import base64
+from flask import Flask
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from dotenv import load_dotenv
-import base64
-from email import policy
-from email.parser import BytesParser
-from imageOCR import classify_words  # Import the classify_words function
+from imageOCR import classify_words  
 
-# Load environment variables from .env file
+app = Flask(__name__)
+
 load_dotenv()
 
 # Get the OAuth 2.0 client secrets file path from environment variables
 OAUTH2_CLIENT_SECRETS_FILE = os.getenv('OAUTH2_CLIENT_SECRETS_FILE')
+
+if not OAUTH2_CLIENT_SECRETS_FILE or not os.path.exists(OAUTH2_CLIENT_SECRETS_FILE):
+    raise FileNotFoundError(f'OAuth 2.0 client secrets file not found: {OAUTH2_CLIENT_SECRETS_FILE}')
+
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
 def get_service():
@@ -52,7 +56,7 @@ def get_message_body(msg):
             body = ''
     return base64.urlsafe_b64decode(body).decode('utf-8')
 
-def save_attachments(msg, store_dir):
+def save_attachments(service, msg, store_dir):
     if 'parts' in msg['payload']:
         for part in msg['payload']['parts']:
             if part['filename']:
@@ -82,11 +86,16 @@ def get_newest_emails(service, store_dir):
             msg = service.users().messages().get(userId='me', id=message['id'], format='full').execute()
             msg_str = get_message_body(msg)
             print('Message: %s' % msg_str)
-            save_attachments(msg, store_dir)
+            save_attachments(service, msg, store_dir)
 
-if __name__ == '__main__':
+@app.route('/fetch-emails', methods=['GET'])
+def fetch_emails():
     service = get_service()
     store_dir = 'attachments'  # Directory to save attachments
     if not os.path.exists(store_dir):
         os.makedirs(store_dir)
     get_newest_emails(service, store_dir)
+    return 'Emails fetched and processed.', 200
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
