@@ -77,7 +77,7 @@ def process_message(message_text):
            - For relative dates ("ends in 3 days"), calculate the actual date
            - If no date found, set to 3 months from current date
            Examples:
-           - "Valid until March 15" -> "2025-03-15"
+           - "Valid until March 15" -> "2025/03/15"
            - "Expires next week" -> [calculate date]
            - No date mentioned -> [current date + 3 months]
 

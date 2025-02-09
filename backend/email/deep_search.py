@@ -81,6 +81,17 @@ def get_html_body(msg):
                   break
     return html
 
+def check_image_size(file_path):
+    """
+    Check if an image file is larger than 275KB
+    """
+    MIN_SIZE_BYTES = 275 * 1024  # 250KB in bytes
+    try:
+        file_size = os.path.getsize(file_path)
+        return file_size >= MIN_SIZE_BYTES
+    except OSError:
+        return False
+
 # MODIFIED FUNCTION: Process attachments and return OCR text output.
 def process_attachments(service, msg, store_dir):
     """
@@ -102,14 +113,15 @@ def process_attachments(service, msg, store_dir):
                 with open(path, 'wb') as f:
                     f.write(file_data)
                 print(f'Saved attachment: {path}')
-                # Process image attachments if the mime type is image
+                # Process image attachments if the mime type is image and size > 250KB
                 if part['mimeType'].startswith('image/'):
-                    # Capture the OCR/classification output
-                    result = classify_words(path)
-                    print(f"Classified attachment image text: {result}")
-                    # Append the classified text (if any) to our output string
-                    if result:
-                        classified_texts += "\n" + result
+                    if check_image_size(path):
+                        result = classify_words(path)
+                        print(f"Classified attachment image text: {result}")
+                        if result:
+                            classified_texts += "\n" + result
+                    else:
+                        print(f"Skipping OCR for {path} - file size below 275KB")
     return classified_texts
 
 # MODIFIED FUNCTION: Process inline images in HTML and return OCR text output.
@@ -136,10 +148,13 @@ def process_inline_images(html_content, store_dir):
                 with open(filename, 'wb') as f:
                     f.write(image_data)
                 print(f"Saved inline image from data URI: {filename}")
-                result = classify_words(filename)
-                print(f"Classified inline data URI image text: {result}")
-                if result:
-                    classified_texts += "\n" + result
+                if check_image_size(filename):
+                    result = classify_words(filename)
+                    print(f"Classified inline data URI image text: {result}")
+                    if result:
+                        classified_texts += "\n" + result
+                else:
+                    print(f"Skipping OCR for {filename} - file size below 275KB")
             except Exception as e:
                 print(f"Failed to process inline data URI image. Error: {str(e)}")
         # Process external URL images
@@ -153,10 +168,13 @@ def process_inline_images(html_content, store_dir):
                     with open(filename, 'wb') as f:
                         f.write(response.content)
                     print(f"Saved inline image from URL: {filename}")
-                    result = classify_words(filename)
-                    print(f"Classified inline URL image text: {result}")
-                    if result:
-                        classified_texts += "\n" + result
+                    if check_image_size(filename):
+                        result = classify_words(filename)
+                        print(f"Classified inline URL image text: {result}")
+                        if result:
+                            classified_texts += "\n" + result
+                    else:
+                        print(f"Skipping OCR for {filename} - file size below 275KB")
                 else:
                     print(f"Failed to download image from {src}: HTTP {response.status_code}")
             except Exception as e:
@@ -164,7 +182,7 @@ def process_inline_images(html_content, store_dir):
     return classified_texts
 
 def get_newest_emails(service, store_dir):
-    results = service.users().messages().list(userId='me', maxResults=10).execute()
+    results = service.users().messages().list(userId='me', maxResults=3).execute()
     messages = results.get('messages', [])
 
     if not messages:
