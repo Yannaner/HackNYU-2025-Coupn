@@ -1,6 +1,6 @@
-import FetchDataSteps from "@/components/tutorial/fetch-data-steps";
+import { Compare } from "@/components/ui/compare";
+import { SparklesText } from "@/components/ui/sparkles-text";
 import { createClient } from "@/utils/supabase/server";
-import { InfoIcon } from "lucide-react";
 import { redirect } from "next/navigation";
 
 export default async function ProtectedPage() {
@@ -15,23 +15,24 @@ export default async function ProtectedPage() {
   }
 
   return (
-    <div className="flex-1 w-full flex flex-col gap-12">
-      <div className="w-full">
-        <div className="bg-accent text-sm p-3 px-5 rounded-md text-foreground flex gap-3 items-center">
-          <InfoIcon size="16" strokeWidth={2} />
-          This is a protected page that you can only see as an authenticated
-          user
-        </div>
+    <div className="flex-1 w-full flex flex-col gap-8 items-center justify-center min-h-[calc(100vh-130px)]">
+      <SparklesText 
+        text="Coupn" 
+        colors={{ first: "#FF5733", second: "#33FF57" }}
+        className="text-4xl md:text-6xl"
+      />
+      <div className="p-4 border rounded-3xl dark:bg-neutral-900 bg-neutral-100 border-neutral-200 dark:border-neutral-800">
+        <Compare
+          firstImage="/before.png"
+          secondImage="/after.png"
+          firstImageClassName="object-cover object-left-top"
+          secondImageClassName="object-cover object-left-top"
+          className="h-[300px] w-[350px] md:h-[600px] md:w-[1000px]"
+          slideMode="hover"
+        />
       </div>
-      <div className="flex flex-col gap-2 items-start">
-        <h2 className="font-bold text-2xl mb-4">Your user details</h2>
-        <pre className="text-xs font-mono p-3 rounded border max-h-32 overflow-auto">
-          {JSON.stringify(user, null, 2)}
-        </pre>
-      </div>
-      <div>
-        <h2 className="font-bold text-2xl mb-4">Next steps</h2>
-        <FetchDataSteps />
+      <div className="text-center mt-4 text-sm text-neutral-600 dark:text-neutral-400">
+        Never lose out on promotional deals again.
       </div>
     </div>
   );

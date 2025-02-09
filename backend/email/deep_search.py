@@ -182,7 +182,7 @@ def process_inline_images(html_content, store_dir):
     return classified_texts
 
 def get_newest_emails(service, store_dir):
-    results = service.users().messages().list(userId='me', maxResults=3, q='category:promotions').execute()
+    results = service.users().messages().list(userId='me', maxResults=8, q='category:promotions').execute()
     messages = results.get('messages', [])
 
     if not messages:
