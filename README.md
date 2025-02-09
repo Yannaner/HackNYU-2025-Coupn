@@ -1,3 +1,4 @@
+<img width="651" alt="coupn" src="https://github.com/user-attachments/assets/0bad20d3-31c2-4752-9708-9054c1f1bae1" />
 # Coupn: America's Solution's to Credit Card Debt
 
 Coupn is built to help you save money by finding promo codes hidden in your email. We noticed many people ignore promo emails and existing promo code tools just don’t work. Coupn fixes that by automatically scanning your promotion emails, finding the best deals, and showing them to you—all in a simple, easy-to-use format.
