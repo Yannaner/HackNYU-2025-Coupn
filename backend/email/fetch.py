@@ -16,8 +16,10 @@ from email import policy
 from email.parser import BytesParser
 from collections import defaultdict
 from bs4 import BeautifulSoup
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 load_dotenv()
 
 # Get the OAuth 2.0 client secrets file path from environment variables
@@ -129,6 +131,21 @@ def gmail_webhook():
     fetch_emails()
 
     return 'OK', 200
+
+@app.route('/get-processed-promotions', methods=['GET'])
+def get_processed_promotions():
+    try:
+        json_path = os.path.join('attachments', 'processed_message.json')
+        if os.path.exists(json_path):
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+                # If data is a single promotion, wrap it in a list
+                if isinstance(data, dict):
+                    data = [data]
+                return jsonify(data)
+        return jsonify([])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
