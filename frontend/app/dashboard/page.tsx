@@ -11,6 +11,7 @@ import { signOutAction } from '../actions'
 import { PromotionSearch } from '@/components/promotion-search'
 import FlipWords from '@/components/flip-words'
 import { X } from '@/components/icons'
+import { MultiStepLoader } from "@/components/ui/multi-step-loader";
 
 interface Promotion {
   "Expiration Date": string
@@ -18,6 +19,7 @@ interface Promotion {
   "Category": "retail" | "electronic" | "grocery" | "sports" | "health" | "cosmetics" | "music" | "books" | "misc" | "dining" | "travel" | "clothing"
   "Promo message": string
   "Promo code": string
+  "Link to Promo": string
   "Bar code": string | null
   user_id: string
   created_at: string
@@ -60,56 +62,121 @@ export default function DashboardPage() {
     }
   }
 
+  // Function to fetch email promotions
   const fetchEmailPromotions = async () => {
     try {
-      // Call the backend to fetch emails
+      // Call the backend to fetch and process emails
       const response = await fetch('http://127.0.0.1:5000/fetch-emails')
       if (!response.ok) {
         throw new Error('Failed to fetch emails')
       }
-
-      // Wait a moment for processing
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      // Read the processed promotions from the JSON file
-      const processedResponse = await fetch('http://127.0.0.1:5000/get-processed-promotions')
-      if (!processedResponse.ok) {
-        throw new Error('Failed to get processed promotions')
-      }
       
-      const processedData = await processedResponse.json()
-      if (processedData && Array.isArray(processedData)) {
-        // Transform and add the promotions
-        const newPromotions = processedData.map(promo => transformPromotion(promo))
-        
+      const promotionsData = await response.json()
+      console.log('Received promotions:', promotionsData)
+      
+      if (promotionsData && Array.isArray(promotionsData)) {
+        // Transform the data to match your database schema
+        const newPromotions = promotionsData.map(promo => ({
+          company: promo.Company,
+          category: promo.Category,
+          promo_message: promo["Promo message"],
+          promo_code: promo["Promo code"] || '',
+          expiration_date: promo["Expiration Date"],
+          promo_link: promo["Link to Promo"] || '',
+          user_id: user?.id,
+          created_at: new Date().toISOString()
+        }))
+
         // Store in Supabase
-        const { error } = await supabase
-          .from('promotions')
-          .upsert(newPromotions, {
-            onConflict: 'Company,"Promo code"',
-            ignoreDuplicates: true
-          })
-
-        if (error) {
-          console.error('Error storing promotions:', error)
-          return
+        for (const promo of newPromotions) {
+          const { error } = await supabase
+            .from('promotions')
+            .upsert(promo, {
+              onConflict: 'user_id,company,promo_message',
+            })
+          
+          if (error) {
+            console.error('Error storing promotion:', error)
+          }
         }
 
-        // Refresh the promotions list
-        const { data: updatedData } = await supabase
-          .from('promotions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-        
-        if (updatedData) {
-          setPromotions(updatedData.map(transformPromotion))
-        }
+        // Fetch all promotions from Supabase
+        await fetchStoredPromotions()
       }
     } catch (error) {
       console.error('Error fetching promotions:', error)
     }
   }
+
+  // Function to fetch stored promotions from Supabase
+  const fetchStoredPromotions = async () => {
+    if (!user) return
+
+    const { data, error } = await supabase
+      .from('promotions')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching stored promotions:', error)
+      return
+    }
+
+    if (data) {
+      // Transform the data back to the format your components expect
+      const transformedPromotions = data.map(promo => ({
+        "Company": promo.company,
+        "Category": promo.category,
+        "Promo message": promo.promo_message,
+        "Promo code": promo.promo_code,
+        "Expiration Date": promo.expiration_date,
+        "Link to Promo": promo.promo_link || '',
+        "Bar code": "", // We're not storing bar codes
+        user_id: promo.user_id,
+        created_at: promo.created_at
+      }))
+      setPromotions(transformedPromotions)
+    }
+  }
+
+  // Function to delete a promotion
+  const deletePromotion = async (company: string, promoMessage: string) => {
+    if (!user) return
+
+    try {
+      // Delete from Supabase using snake_case field names
+      const { error } = await supabase
+        .from('promotions')
+        .delete()
+        .match({
+          user_id: user.id,
+          company: company,
+          promo_message: promoMessage
+        })
+
+      if (error) {
+        console.error('Error deleting promotion:', error)
+        return
+      }
+
+      // If Supabase delete was successful, update local state
+      setPromotions(currentPromotions => 
+        currentPromotions.filter(p => 
+          !(p.Company === company && p["Promo message"] === promoMessage)
+        )
+      )
+    } catch (error) {
+      console.error('Error deleting promotion:', error)
+    }
+  }
+
+  // Fetch stored promotions on component mount
+  useEffect(() => {
+    if (user) {
+      fetchStoredPromotions()
+    }
+  }, [user])
 
   useEffect(() => {
     const checkUser = async () => {
@@ -119,88 +186,6 @@ export default function DashboardPage() {
           redirect('/sign-in')
         }
         setUser(user)
-        
-        // Fetch email promotions after user logs in
-        await fetchEmailPromotions()
-        
-        // Load user's promotions from Supabase
-        const { data: userPromotions, error } = await supabase
-          .from('promotions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-
-        if (error) {
-          console.error('Error loading promotions:', error)
-          return
-        }
-
-        // If user has no promotions, add sample data
-        if (!userPromotions || userPromotions.length === 0) {
-          // Generate a random string to make promo codes unique
-          const uniqueSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
-          
-          const samplePromotions = [
-            {
-              "Expiration Date": "2025-03-15",
-              "Company": "Best Buy",
-              "Category": "electronic",
-              "Promo message": "Get $50 off on purchases over $200",
-              "Promo code": `SPRING50_${uniqueSuffix}`,
-              "Bar code": `4589721365${uniqueSuffix}`,
-              "user_id": user.id,
-              "created_at": new Date().toISOString()
-            },
-            {
-              "Expiration Date": "2025-02-28",
-              "Company": "Whole Foods",
-              "Category": "grocery",
-              "Promo message": "20% off on all organic products",
-              "Promo code": `ORGANIC20_${uniqueSuffix}`,
-              "Bar code": `7856439210${uniqueSuffix}`,
-              "user_id": user.id,
-              "created_at": new Date().toISOString()
-            },
-            {
-              "Expiration Date": "2025-04-01",
-              "Company": "Nike",
-              "Category": "sports",
-              "Promo message": "30% off on all running shoes",
-              "Promo code": `RUN30_${uniqueSuffix}`,
-              "Bar code": `9632587410${uniqueSuffix}`,
-              "user_id": user.id,
-              "created_at": new Date().toISOString()
-            },
-            {
-              "Expiration Date": "2025-03-31",
-              "Company": "Sephora",
-              "Category": "cosmetics",
-              "Promo message": "Free shipping on orders over $35",
-              "Promo code": `FREESHIP_${uniqueSuffix}`,
-              "Bar code": `1472583690${uniqueSuffix}`,
-              "user_id": user.id,
-              "created_at": new Date().toISOString()
-            }
-          ]
-
-          const { error: insertError } = await supabase
-            .from('promotions')
-            .insert(samplePromotions)
-            .select()
-
-          if (insertError) {
-            console.error('Error inserting sample promotions:', insertError.message)
-            console.error('Error details:', {
-              code: insertError.code,
-              details: insertError.details,
-              hint: insertError.hint
-            })
-          } else {
-            setPromotions(samplePromotions.map(transformPromotion))
-          }
-        } else {
-          setPromotions(userPromotions.map(transformPromotion))
-        }
       } catch (error) {
         console.error('Error:', error)
       } finally {
@@ -256,25 +241,6 @@ export default function DashboardPage() {
     }
   }
 
-  // Function to delete a promotion
-  const deletePromotion = async (promoCode: string) => {
-    if (!user) return
-
-    const { error } = await supabase
-      .from('promotions')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('Promo code', promoCode)
-
-    if (error) {
-      console.error('Error deleting promotion:', error)
-      return
-    }
-
-    // Update local state
-    setPromotions(promotions.filter(p => p["Promo code"] !== promoCode))
-  }
-
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
       retail: "bg-blue-100 text-blue-800",
@@ -293,6 +259,67 @@ export default function DashboardPage() {
     return colors[category] || "bg-gray-100 text-gray-800"
   }
 
+  const loadingStates = [
+    { text: "Checking your email for promotions..." },
+    { text: "Scanning promotional content..." },
+    { text: "Extracting deal details..." },
+    { text: "Finding promo codes..." },
+    { text: "Organizing your savings..." },
+    { text: "Almost there..." }
+  ];
+
+  const refreshPromotions = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const response = await fetch('http://127.0.0.1:5000/fetch-emails')
+      if (!response.ok) {
+        throw new Error('Failed to fetch emails')
+      }
+      
+      const promotionsData = await response.json()
+      console.log('Received promotions:', promotionsData)
+      
+      if (promotionsData && Array.isArray(promotionsData)) {
+        // Transform the data to match your database schema
+        const newPromotions = promotionsData.map(promo => ({
+          company: promo.Company,
+          category: promo.Category,
+          promo_message: promo["Promo message"],
+          promo_code: promo["Promo code"] || '',
+          expiration_date: promo["Expiration Date"],
+          promo_link: promo["Link to Promo"] || '',
+          user_id: user?.id,
+          created_at: new Date().toISOString()
+        }))
+
+        // Store in Supabase
+        for (const promo of newPromotions) {
+          const { error } = await supabase
+            .from('promotions')
+            .upsert(promo, {
+              onConflict: 'user_id,company,promo_message',
+            })
+          
+          if (error) {
+            console.error('Error storing promotion:', error)
+          }
+        }
+
+        // Fetch all promotions from Supabase
+        await fetchStoredPromotions()
+      }
+      
+      // Keep loader running for a bit to show all states
+      setTimeout(() => {
+        setLoading(false);
+      }, 12000); // Show loader for 12 seconds total
+    } catch (error) {
+      console.error('Error refreshing promotions:', error);
+      setLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto p-8">
@@ -305,118 +332,144 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="container mx-auto py-0">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <div className="mb-4 text-center w-full">
-            <div className="text-xl mx-auto font-normal text-neutral-600 dark:text-neutral-400">
-              Introducing{" "}
-              <FlipWords
-                words={[
-                  "smart promotion tracking",
-                  "intelligent spending",
-                  "seamless savings",
-                  "unparalleled organization"
-                ]}
-              />{" "}
-              for your wallet.
+    <div className="flex justify-center w-full bg-background min-h-screen">
+      <div className="w-[1400px] max-w-[95%] py-8">
+        <MultiStepLoader loadingStates={loadingStates} loading={loading} duration={2000} loop={true} />
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <div className="mb-4">
+              <div className="text-xl font-normal text-neutral-600 dark:text-neutral-400">
+                Introducing{" "}
+                <FlipWords
+                  words={[
+                    "smart promotion tracking",
+                    "intelligent spending",
+                    "seamless savings",
+                    "unparalleled organization"
+                  ]}
+                />{" "}
+                for your wallet.
+              </div>
             </div>
+            <h1 className="text-2xl font-bold">Welcome, {user?.user_metadata?.first_name || 'User'}!</h1>
+            <p className="text-muted-foreground">Here are your saved promotions</p>
           </div>
-          <h1 className="text-2xl font-bold">Welcome, {user?.user_metadata?.first_name || 'User'}!</h1>
-          <p className="text-muted-foreground">Here are your saved promotions</p>
-        </div>
-        <div className="flex gap-2">
-          <Button 
-            onClick={fetchEmailPromotions}
-          >
-            Refresh Promotions
-          </Button>
-        </div>
-      </div>
-
-      <div className="mb-8">
-        <PromotionSearch 
-          promotions={promotions}
-          onFilterChange={setFilteredIndices}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Show "no results" message when filtered promotions are empty */}
-        {filteredIndices !== null && 
-         promotions.filter((_, index) => filteredIndices.includes(index)).length === 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Card className="col-span-full">
-              <CardHeader>
-                <CardTitle>No matching promotions found</CardTitle>
-                <CardDescription>Try adjusting your search terms</CardDescription>
-              </CardHeader>
-            </Card>
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => {
+                console.log('Fetching more promotions...')
+                refreshPromotions()
+              }}
+            >
+              Refresh Promotions
+            </Button>
           </div>
-        )}
+        </div>
 
-        {promotions
-          .filter((_, index) => filteredIndices === null || filteredIndices.includes(index))
-          .map((promo, index) => (
-            <Card key={index} className="border-2">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-xl mb-2">{promo.Company}</CardTitle>
-                    <Badge className={`${getCategoryColor(promo.Category)}`}>
-                      {promo.Category}
+        <div className="mb-8">
+          <PromotionSearch 
+            promotions={promotions}
+            onFilterChange={setFilteredIndices}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {/* Show "no results" message when filtered promotions are empty */}
+          {filteredIndices !== null && 
+           promotions.filter((_, index) => filteredIndices.includes(index)).length === 0 && (
+            <div className="col-span-full">
+              <Card>
+                <CardHeader>
+                  <CardTitle>No matching promotions found</CardTitle>
+                  <CardDescription>Try adjusting your search terms</CardDescription>
+                </CardHeader>
+              </Card>
+            </div>
+          )}
+
+          {promotions
+            .filter((_, index) => filteredIndices === null || filteredIndices.includes(index))
+            .map((promo, index) => (
+              <Card 
+                key={`${promo.Company}-${promo["Promo message"]}`} 
+                className="border-2 hover:border-primary/50 transition-colors flex flex-col h-[500px]"
+              >
+                <CardHeader className="space-y-3 min-h-[120px] flex flex-col justify-between">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex-1">
+                      <CardTitle className="text-xl mb-2 line-clamp-2">{promo.Company}</CardTitle>
+                      <Badge className={`${getCategoryColor(promo.Category)}`}>
+                        {promo.Category}
+                      </Badge>
+                    </div>
+                    <Badge variant="outline" className="shrink-0">
+                      Expires: {new Date(promo["Expiration Date"]).toLocaleDateString()}
                     </Badge>
                   </div>
-                  <Badge variant="outline" className="ml-2">
-                    Expires: {new Date(promo["Expiration Date"]).toLocaleDateString()}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">{promo["Promo message"]}</p>
-                <div className="bg-muted p-4 rounded-lg space-y-2">
-                  <div className="flex flex-col gap-2">
-                    <div>
-                      <span className="font-bold">Promo Code: </span>
-                      {promo["Promo code"]}
-                    </div>
-                    {promo["Bar code"] && (
-                      <div className="flex flex-col gap-2">
-                        <span className="font-bold">Bar Code: </span>
-                        <div className="w-full flex justify-center">
-                          <Barcode 
-                            value={promo["Bar code"]} 
-                            width={1.5}
-                            height={50}
-                            fontSize={14}
-                            margin={10}
-                            background="#ffffff"
-                          />
-                        </div>
-                      </div>
-                    )}
+                </CardHeader>
+                <CardContent className="space-y-6 flex-1 overflow-hidden flex flex-col">
+                  <div className="min-h-[80px]">
+                    <p className="text-sm text-muted-foreground line-clamp-3">{promo["Promo message"]}</p>
                   </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between items-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => deletePromotion(promo["Promo code"])}
-                  className="text-red-700 hover:text-red-500 hover:bg-red-100/20"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-                <Button
-                  onClick={() => {
-                    navigator.clipboard.writeText(promo["Promo code"])
-                  }}
-                >
-                  Copy Code
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+                  <div className="bg-muted p-4 rounded-lg space-y-4 flex-1">
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <span className="font-medium text-sm">Promo Code: </span>
+                        <span className="font-mono">{promo["Promo code"] || "N/A"}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-sm">Promo Link: </span>
+                        {promo["Link to Promo"] ? (
+                          <a 
+                            href={promo["Link to Promo"]} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 underline"
+                          >
+                            Visit Promotion
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">N/A</span>
+                        )}
+                      </div>
+                      {promo["Bar code"] && (
+                        <div className="flex flex-col gap-2">
+                          <span className="font-medium text-sm">Bar Code: </span>
+                          <div className="w-full flex justify-center bg-white p-2 rounded">
+                            <Barcode 
+                              value={promo["Bar code"]} 
+                              width={1.5}
+                              height={50}
+                              fontSize={14}
+                              margin={10}
+                              background="#ffffff"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-between items-center pt-6">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => deletePromotion(promo.Company, promo["Promo message"])}
+                    className="text-red-700 hover:text-red-500 hover:bg-red-100/20"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      navigator.clipboard.writeText(promo["Promo code"])
+                    }}
+                  >
+                    Copy Code
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+        </div>
       </div>
     </div>
   )

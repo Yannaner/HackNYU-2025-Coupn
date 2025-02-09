@@ -3,6 +3,7 @@ import pickle
 import base64
 import json
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -16,7 +17,6 @@ from email import policy
 from email.parser import BytesParser
 from collections import defaultdict
 from bs4 import BeautifulSoup
-from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -82,37 +82,41 @@ def save_attachments(service, msg, store_dir):
                     classify_words(path)
 
 def get_newest_emails(service, store_dir):
-    results = service.users().messages().list(userId='me', maxResults=1).execute()
+    results = service.users().messages().list(userId='me', maxResults=10).execute()
     messages = results.get('messages', [])
 
     if not messages:
-        print('No messages found.')
-    else:
-        for message in messages:
-            msg = service.users().messages().get(userId='me', id=message['id'], format='full').execute()
-            msg_str = get_message_body(msg)
-            print('Message: %s' % msg_str)
-            save_attachments(service, msg, store_dir)
-
-
-            processed_message = process_message(msg_str)
-            print('Processed Message:', processed_message)
-
-            #JSON file /backend/email/attachments
-            json_filename = os.path.join(store_dir, f'processed_message.json')
-            with open(json_filename, 'w') as json_file:
-                json.dump(processed_message, json_file)
-            print(f'Saved processed message as JSON: {json_filename}')
-
+        print("No messages found.")
+        return []
+    
+    processed_promotions = []
+    for message in messages:
+        msg = service.users().messages().get(userId='me', id=message['id'], format='full').execute()
+        msg_str = get_message_body(msg)
+        print("Message: %s" % msg_str)
+        save_attachments(service, msg, store_dir)
+        
+        # Process the message and add to promotions list
+        from message_processing import process_message
+        processed_promotion = process_message(msg_str)
+        if processed_promotion:
+            processed_promotions.extend(processed_promotion if isinstance(processed_promotion, list) else [processed_promotion])
+    
+    return processed_promotions
 
 @app.route('/fetch-emails', methods=['GET'])
 def fetch_emails():
-    service = get_service()
-    store_dir = 'attachments'  
-    if not os.path.exists(store_dir):
-        os.makedirs(store_dir)
-    get_newest_emails(service, store_dir)
-    return 'Emails fetched and processed.', 200
+    try:
+        service = get_service()
+        store_dir = 'attachments'
+        if not os.path.exists(store_dir):
+            os.makedirs(store_dir)
+        promotions = get_newest_emails(service, store_dir)
+        print("Processed promotions:", promotions)  # Debug log
+        return jsonify(promotions)
+    except Exception as e:
+        print(f"Error in fetch_emails: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/gmail-webhook', methods=['POST'])
 def gmail_webhook():
@@ -132,20 +136,6 @@ def gmail_webhook():
 
     return 'OK', 200
 
-@app.route('/get-processed-promotions', methods=['GET'])
-def get_processed_promotions():
-    try:
-        json_path = os.path.join('attachments', 'processed_message.json')
-        if os.path.exists(json_path):
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-                # If data is a single promotion, wrap it in a list
-                if isinstance(data, dict):
-                    data = [data]
-                return jsonify(data)
-        return jsonify([])
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    print("Starting Flask server...")
+    app.run(debug=True, port=5000, host='127.0.0.1')
