@@ -2,16 +2,20 @@ import os
 import pickle
 import base64
 import json
-import subprocess
-import time
-import requests
 from flask import Flask, request, jsonify
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from dotenv import load_dotenv
-from imageOCR import classify_words  # Import the classify_words function
+from imageOCR import classify_words  
+from message_processing import process_message 
+import re
+import email
+from email import policy
+from email.parser import BytesParser
+from collections import defaultdict
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
@@ -48,14 +52,6 @@ def get_service():
     service = build('gmail', 'v1', credentials=creds)
     return service
 
-def watch_gmail(service, public_url):
-    request_body = {
-        'labelIds': ['INBOX'],
-        'topicName': 'projects/hacknyu-450316/topics/gmail-notifications'
-    }
-    response = service.users().watch(userId='me', body=request_body).execute()
-    print(f'Watch response: {response}')
-
 def get_message_body(msg):
     if 'data' in msg['payload']['body']:
         body = msg['payload']['body']['data']
@@ -89,7 +85,7 @@ def save_attachments(service, msg, store_dir):
                     classify_words(path)
 
 def get_newest_emails(service, store_dir):
-    results = service.users().messages().list(userId='me', maxResults=10).execute()
+    results = service.users().messages().list(userId='me', maxResults=1).execute()
     messages = results.get('messages', [])
 
     if not messages:
@@ -101,10 +97,22 @@ def get_newest_emails(service, store_dir):
             print('Message: %s' % msg_str)
             save_attachments(service, msg, store_dir)
 
+
+            processed_message = process_message(msg_str)
+            print('Processed Message:', processed_message)
+            # Save the processed message as a JSON file
+            json_filename = os.path.join(store_dir, f'processed_message_{message["id"]}.json')
+            with open(json_filename, 'w') as json_file:
+                json.dump(processed_message, json_file)
+            print(f'Saved processed message as JSON: {json_filename}')
+
+
+
+
 @app.route('/fetch-emails', methods=['GET'])
 def fetch_emails():
     service = get_service()
-    store_dir = 'attachments'  # Directory to save attachments
+    store_dir = 'attachments'  # Directory to save attachments and JSON files
     if not os.path.exists(store_dir):
         os.makedirs(store_dir)
     get_newest_emails(service, store_dir)
@@ -132,21 +140,5 @@ def gmail_webhook():
 
     return 'OK', 200
 
-def start_ngrok():
-    # Start ngrok as a subprocess
-    ngrok_path = os.path.join(os.getcwd(), 'ngrok.exe')
-    ngrok_process = subprocess.Popen([ngrok_path, 'http', '5000'], stdout=subprocess.PIPE)
-    time.sleep(2)  # Wait for ngrok to start
-
-    # Get the public URL from ngrok's API
-    response = requests.get('http://localhost:4040/api/tunnels')
-    tunnels = response.json()['tunnels']
-    public_url = tunnels[0]['public_url']
-    return public_url
-
 if __name__ == '__main__':
-    public_url = start_ngrok()
-    print(f'ngrok public URL: {public_url}')
-    service = get_service()
-    watch_gmail(service, public_url)
     app.run(debug=True, port=5000)
