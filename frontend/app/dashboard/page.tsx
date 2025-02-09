@@ -259,18 +259,20 @@ export default function DashboardPage() {
     return colors[category] || "bg-gray-100 text-gray-800"
   }
 
+  const [refreshLoading, setRefreshLoading] = useState(false);
+
   const loadingStates = [
-    { text: "Checking your email for promotions..." },
-    { text: "Scanning promotional content..." },
-    { text: "Extracting deal details..." },
-    { text: "Finding promo codes..." },
-    { text: "Organizing your savings..." },
-    { text: "Almost there..." }
+    { text: "Checking your email" },
+    { text: "Finding new promotions" },
+    { text: "Analyzing promotional content" },
+    { text: "Extracting details" },
+    { text: "Parsing images" },
+    { text: "Refactoring text" },
+    { text: "Updating your dashboard" }
   ];
 
   const refreshPromotions = async () => {
-    if (!user) return;
-    setLoading(true);
+    setRefreshLoading(true);
     try {
       const response = await fetch('http://127.0.0.1:5000/fetch-emails')
       if (!response.ok) {
@@ -306,17 +308,13 @@ export default function DashboardPage() {
           }
         }
 
-        // Fetch all promotions from Supabase
+        // Fetch all promotions from Supabase and stop loading
         await fetchStoredPromotions()
+        setRefreshLoading(false)
       }
-      
-      // Keep loader running for a bit to show all states
-      setTimeout(() => {
-        setLoading(false);
-      }, 12000); // Show loader for 12 seconds total
     } catch (error) {
-      console.error('Error refreshing promotions:', error);
-      setLoading(false);
+      console.error('Error fetching promotions:', error)
+      setRefreshLoading(false)
     }
   };
 
@@ -334,7 +332,6 @@ export default function DashboardPage() {
   return (
     <div className="flex justify-center w-full bg-background min-h-screen">
       <div className="w-[1400px] max-w-[95%] py-8">
-        <MultiStepLoader loadingStates={loadingStates} loading={loading} duration={2000} loop={true} />
         <div className="flex justify-between items-center mb-8">
           <div>
             <div className="mb-4">
@@ -355,6 +352,12 @@ export default function DashboardPage() {
             <p className="text-muted-foreground">Here are your saved promotions</p>
           </div>
           <div className="flex gap-2">
+            <MultiStepLoader 
+              loadingStates={loadingStates} 
+              loading={refreshLoading} 
+              duration={2000} 
+              loop={false} 
+            />
             <Button 
               onClick={() => {
                 console.log('Fetching more promotions...')

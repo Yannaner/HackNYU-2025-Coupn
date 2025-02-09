@@ -2,7 +2,7 @@
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect } from "react";
-
+ 
 const CheckIcon = ({ className }: { className?: string }) => {
   return (
     <svg
@@ -17,7 +17,7 @@ const CheckIcon = ({ className }: { className?: string }) => {
     </svg>
   );
 };
-
+ 
 const CheckFilled = ({ className }: { className?: string }) => {
   return (
     <svg
@@ -34,11 +34,11 @@ const CheckFilled = ({ className }: { className?: string }) => {
     </svg>
   );
 };
-
+ 
 type LoadingState = {
   text: string;
 };
-
+ 
 const LoaderCore = ({
   loadingStates,
   value = 0,
@@ -51,7 +51,7 @@ const LoaderCore = ({
       {loadingStates.map((loadingState, index) => {
         const distance = Math.abs(index - value);
         const opacity = Math.max(1 - distance * 0.2, 0);
-
+ 
         return (
           <motion.div
             key={index}
@@ -88,11 +88,11 @@ const LoaderCore = ({
     </div>
   );
 };
-
+ 
 export const MultiStepLoader = ({
   loadingStates,
   loading,
-  duration = 2000,
+  duration = 100000,
   loop = true,
 }: {
   loadingStates: LoadingState[];
@@ -101,7 +101,7 @@ export const MultiStepLoader = ({
   loop?: boolean;
 }) => {
   const [currentState, setCurrentState] = useState(0);
-
+ 
   useEffect(() => {
     if (!loading) {
       setCurrentState(0);
@@ -116,10 +116,9 @@ export const MultiStepLoader = ({
           : Math.min(prevState + 1, loadingStates.length - 1)
       );
     }, duration);
-
+ 
     return () => clearTimeout(timeout);
   }, [currentState, loading, loop, loadingStates.length, duration]);
-
   return (
     <AnimatePresence mode="wait">
       {loading && (
@@ -138,7 +137,7 @@ export const MultiStepLoader = ({
           <div className="h-96 relative">
             <LoaderCore value={currentState} loadingStates={loadingStates} />
           </div>
-
+ 
           <div className="bg-gradient-to-t inset-x-0 z-20 bottom-0 bg-white dark:bg-black h-full absolute [mask-image:radial-gradient(900px_at_center,transparent_30%,white)]" />
         </motion.div>
       )}
