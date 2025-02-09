@@ -12,6 +12,7 @@ import { PromotionSearch } from '@/components/promotion-search'
 import FlipWords from '@/components/flip-words'
 import { X } from '@/components/icons'
 import { MultiStepLoader } from "@/components/ui/multi-step-loader";
+import { VoiceFeedback } from "@/components/ui/voice-feedback";
 
 interface Promotion {
   "Expiration Date": string
@@ -473,6 +474,10 @@ export default function DashboardPage() {
               </Card>
             ))}
         </div>
+        <Card className="p-6">
+          <h2 className="text-2xl font-semibold mb-4">Voice Assistant</h2>
+          <VoiceFeedback promotions={promotions} />
+        </Card>
       </div>
     </div>
   )

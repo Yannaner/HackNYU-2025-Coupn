@@ -1,5 +1,6 @@
 import { Compare } from "@/components/ui/compare";
 import { SparklesText } from "@/components/ui/sparkles-text";
+import { VoiceFeedback } from "@/components/ui/voice-feedback";
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 
