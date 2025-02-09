@@ -1,7 +1,7 @@
 <img width="651" alt="coupn" src="https://github.com/user-attachments/assets/0bad20d3-31c2-4752-9708-9054c1f1bae1" />
 
 
-# Coupn: America's Solution's to Credit Card Debt
+# Coupn: America's Solution's to Credit Card Debt - SCROLL DOWN FOR INSTALLATION GUIDE
 
 Coupn is built to help you save money by finding promo codes hidden in your email. We noticed many people ignore promo emails and existing promo code tools just don’t work. Coupn fixes that by automatically scanning your promotion emails, finding the best deals, and showing them to you—all in a simple, easy-to-use format.
 
@@ -69,6 +69,138 @@ We’re just getting started. Here’s what we plan to add:
 Coupn is built for anyone tired of missing out on great deals hidden in messy promotion emails. Our tool makes saving money simple, effective, and stress-free. We are excited to see how Coupn can help people manage their spending and reduce credit card debt. We look forward to your feedback and ideas as we continue to improve and add new features.
 
 Try Coupn today and see how easy it is to get the best promo codes without any hassle!
+
+## Getting Started
+
+### Prerequisites
+- Node.js 18+
+- Python 3.9+
+- Gmail Account
+- Supabase Account
+- OpenAI API Key
+- Google Cloud Project with Vision API enabled
+- Google Gemini API Key
+
+### Environment Setup
+
+1. **Frontend Setup (.env.local)**
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+OPENAI_API_KEY=your_openai_api_key
+```
+
+2. **Backend Setup (.env)**
+```bash
+GMAIL_CREDENTIALS_PATH=path_to_gmail_credentials.json
+GOOGLE_APPLICATION_CREDENTIALS=path_to_google_cloud_credentials.json
+GEMINI_API_KEY=your_gemini_api_key
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_service_key
+```
+
+### Installation
+
+1. **Clone the Repository**
+```bash
+git clone https://github.com/yourusername/coupn.git
+cd coupn
+```
+
+2. **Frontend Setup**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+3. **Backend Setup**
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python app.py
+```
+
+4. **Database Setup**
+- Create a new Supabase project
+- Run the following SQL to create the required tables:
+```sql
+CREATE TABLE promotions (
+  id SERIAL PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  company TEXT NOT NULL,
+  category TEXT NOT NULL,
+  promo_message TEXT NOT NULL,
+  promo_code TEXT,
+  expiration_date DATE,
+  promo_link TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+  UNIQUE(user_id, company, promo_message)
+);
+```
+
+### Gmail API Setup
+1. Go to Google Cloud Console
+2. Create a new project
+3. Enable Gmail API
+4. Create OAuth 2.0 credentials
+5. Download credentials and save as `gmail_credentials.json`
+6. Run the backend once to complete OAuth flow
+
+## Development
+
+### Frontend Structure
+```
+frontend/
+├── app/              # Next.js app router pages
+├── components/       # React components
+├── lib/             # Utility functions
+├── public/          # Static assets
+└── styles/          # Global styles
+```
+
+### Backend Structure
+```
+backend/
+├── email/           # Email processing modules
+├── models/          # Data models
+├── utils/           # Utility functions
+└── app.py          # Main Flask application
+```
+
+### Key Features Implementation
+
+1. **Email Processing Pipeline**
+   - Fetches emails using Gmail API
+   - Extracts images and text content
+   - Processes images with Google Vision API
+   - Uses Gemini Pro Vision for comprehensive analysis
+
+2. **Natural Language Search**
+   - Implements semantic search using OpenAI
+   - Matches user queries with relevant promotions
+   - Supports both text and voice input
+
+3. **Voice Commands**
+   - Uses Web Speech API for voice recognition
+   - Processes natural language queries
+   - Returns relevant promotions based on voice input
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
 
 ---
 
