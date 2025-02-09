@@ -6,13 +6,13 @@ import { redirect } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import Barcode from 'react-barcode'
 import { signOutAction } from '../actions'
 import { PromotionSearch } from '@/components/promotion-search'
 import FlipWords from '@/components/flip-words'
 import { X } from '@/components/icons'
 import { MultiStepLoader } from "@/components/ui/multi-step-loader";
 import { VoiceFeedback } from "@/components/ui/voice-feedback";
+import { Switch } from "@/components/ui/switch"
 
 interface Promotion {
   "Expiration Date": string
@@ -27,6 +27,12 @@ interface Promotion {
 }
 
 const CATEGORIES = ["retail", "electronic", "grocery", "sports", "health", "cosmetics", "music", "books", "misc", "dining", "travel", "clothing"] as const
+
+const isExpired = (date: string) => {
+  const expiryDate = new Date(date);
+  const today = new Date();
+  return expiryDate < today;
+};
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
@@ -319,6 +325,32 @@ export default function DashboardPage() {
     }
   };
 
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showExpired, setShowExpired] = useState(true)
+
+  const filteredPromotions = promotions?.filter((promo, index) => {
+    // If we have filtered indices from search, use those
+    if (filteredIndices !== null) {
+      return filteredIndices.includes(index);
+    }
+    
+    // Otherwise, use category and expiry filters
+    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(promo.Category)
+    const matchesExpiry = showExpired || !isExpired(promo["Expiration Date"])
+    return matchesCategory && matchesExpiry
+  })
+
+  const toggleCategory = (category: string) => {
+    if (selectedCategories.includes(category)) {
+      setSelectedCategories(selectedCategories.filter(c => c !== category))
+    } else {
+      setSelectedCategories([...selectedCategories, category])
+    }
+    // Clear search results when changing categories
+    setFilteredIndices(null)
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto p-8">
@@ -370,17 +402,42 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="mb-8">
+        <div className="flex flex-col gap-4 mb-8">
+          <div className="flex items-center justify-between">
+            <h1 className="text-4xl font-bold">Your Promotions</h1>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-neutral-600">Show All</span>
+              <Switch
+                checked={!showExpired}
+                onCheckedChange={(checked) => setShowExpired(!checked)}
+              />
+              <span className="text-sm text-neutral-600">Active Only</span>
+            </div>
+          </div>
           <PromotionSearch 
             promotions={promotions}
             onFilterChange={setFilteredIndices}
           />
+          <div className="flex flex-wrap gap-2 mb-4">
+            {CATEGORIES.map((category) => (
+              <Badge
+                key={category}
+                className={`cursor-pointer ${
+                  selectedCategories.includes(category)
+                    ? getCategoryColor(category)
+                    : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400"
+                }`}
+                onClick={() => toggleCategory(category)}
+              >
+                {category}
+              </Badge>
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {/* Show "no results" message when filtered promotions are empty */}
-          {filteredIndices !== null && 
-           promotions.filter((_, index) => filteredIndices.includes(index)).length === 0 && (
+          {filteredPromotions.length === 0 && (
             <div className="col-span-full">
               <Card>
                 <CardHeader>
@@ -391,88 +448,91 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {promotions
-            .filter((_, index) => filteredIndices === null || filteredIndices.includes(index))
-            .map((promo, index) => (
-              <Card 
-                key={`${promo.Company}-${promo["Promo message"]}`} 
-                className="border-2 hover:border-primary/50 transition-colors flex flex-col h-[500px]"
-              >
-                <CardHeader className="space-y-3 min-h-[120px] flex flex-col justify-between">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="flex-1">
-                      <CardTitle className="text-xl mb-2 line-clamp-2">{promo.Company}</CardTitle>
+          {filteredPromotions.map((promo, index) => (
+            <Card 
+              key={`${promo.Company}-${promo["Promo message"]}`} 
+              className="border-2 hover:border-primary/50 transition-colors flex flex-col h-[350px]"
+            >
+              <CardHeader className="space-y-2 pb-3">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg mb-1 line-clamp-1">{promo.Company}</CardTitle>
+                    <div className="flex flex-wrap gap-1">
                       <Badge className={`${getCategoryColor(promo.Category)}`}>
                         {promo.Category}
                       </Badge>
-                    </div>
-                    <Badge variant="outline" className="shrink-0">
-                      Expires: {new Date(promo["Expiration Date"]).toLocaleDateString()}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6 flex-1 overflow-hidden flex flex-col">
-                  <div className="min-h-[80px]">
-                    <p className="text-sm text-muted-foreground line-clamp-3">{promo["Promo message"]}</p>
-                  </div>
-                  <div className="bg-muted p-4 rounded-lg space-y-4 flex-1">
-                    <div className="flex flex-col gap-4">
-                      <div>
-                        <span className="font-medium text-sm">Promo Code: </span>
-                        <span className="font-mono">{promo["Promo code"] || "N/A"}</span>
-                      </div>
-                      <div>
-                        <span className="font-medium text-sm">Promo Link: </span>
-                        {promo["Link to Promo"] ? (
-                          <a 
-                            href={promo["Link to Promo"]} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 underline"
-                          >
-                            Visit Promotion
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground">N/A</span>
-                        )}
-                      </div>
-                      {promo["Bar code"] && (
-                        <div className="flex flex-col gap-2">
-                          <span className="font-medium text-sm">Bar Code: </span>
-                          <div className="w-full flex justify-center bg-white p-2 rounded">
-                            <Barcode 
-                              value={promo["Bar code"]} 
-                              width={1.5}
-                              height={50}
-                              fontSize={14}
-                              margin={10}
-                              background="#ffffff"
-                            />
-                          </div>
-                        </div>
+                      {isExpired(promo["Expiration Date"]) && (
+                        <Badge variant="destructive" className="text-xs">
+                          Expired
+                        </Badge>
                       )}
                     </div>
                   </div>
-                </CardContent>
-                <CardFooter className="flex justify-between items-center pt-6">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deletePromotion(promo.Company, promo["Promo message"])}
-                    className="text-red-700 hover:text-red-500 hover:bg-red-100/20"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      navigator.clipboard.writeText(promo["Promo code"])
-                    }}
-                  >
-                    Copy Code
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
+                  <Badge variant="outline" className="shrink-0 text-xs">
+                    Expires: {new Date(promo["Expiration Date"]).toLocaleDateString()}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 flex-1 overflow-hidden flex flex-col">
+                <div className="min-h-[40px]">
+                  <p className="text-sm text-muted-foreground line-clamp-2">{promo["Promo message"]}</p>
+                </div>
+                <div className="bg-muted p-3 rounded-lg space-y-3 flex-1">
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <span className="font-medium text-sm">Promo Code: </span>
+                      <span className="font-mono text-sm">{promo["Promo code"] || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium text-sm">Promo Link: </span>
+                      {promo["Link to Promo"] ? (
+                        <a 
+                          href={promo["Link to Promo"]} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline text-sm"
+                        >
+                          Visit Promotion
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">N/A</span>
+                      )}
+                    </div>
+                    {promo["Bar code"] && (
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-sm">Bar Code: </span>
+                        <div className="w-full flex justify-center bg-white p-2 rounded">
+                          <img 
+                            src={`https://barcodeapi.org/api/128/${encodeURIComponent(promo["Bar code"])}`}
+                            alt={`Barcode for ${promo["Bar code"]}`}
+                            className="max-w-full h-[30px]"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-between items-center pt-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => deletePromotion(promo.Company, promo["Promo message"])}
+                  className="text-red-700 hover:text-red-500 hover:bg-red-100/20"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <Button
+                  onClick={() => {
+                    navigator.clipboard.writeText(promo["Promo code"])
+                  }}
+                  size="sm"
+                >
+                  Copy Code
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
         </div>
         <Card className="p-6">
           <h2 className="text-2xl font-semibold mb-4">Voice Assistant</h2>

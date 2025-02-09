@@ -92,7 +92,7 @@ const LoaderCore = ({
 export const MultiStepLoader = ({
   loadingStates,
   loading,
-  duration = 10000,
+  duration = 10000000,
   loop = true,
 }: {
   loadingStates: LoadingState[];
