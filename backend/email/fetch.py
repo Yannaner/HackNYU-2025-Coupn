@@ -18,8 +18,6 @@ from collections import defaultdict
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
-
-# Load environment variables from .env file
 load_dotenv()
 
 # Get the OAuth 2.0 client secrets file path from environment variables
@@ -32,12 +30,9 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
 def get_service():
     creds = None
-    # The file token.pickle stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first time.
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
-    # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -100,19 +95,18 @@ def get_newest_emails(service, store_dir):
 
             processed_message = process_message(msg_str)
             print('Processed Message:', processed_message)
-            # Save the processed message as a JSON file
-            json_filename = os.path.join(store_dir, f'processed_message_{message["id"]}.json')
+
+            #JSON file /backend/email/attachments
+            json_filename = os.path.join(store_dir, f'processed_message.json')
             with open(json_filename, 'w') as json_file:
                 json.dump(processed_message, json_file)
             print(f'Saved processed message as JSON: {json_filename}')
 
 
-
-
 @app.route('/fetch-emails', methods=['GET'])
 def fetch_emails():
     service = get_service()
-    store_dir = 'attachments'  # Directory to save attachments and JSON files
+    store_dir = 'attachments'  
     if not os.path.exists(store_dir):
         os.makedirs(store_dir)
     get_newest_emails(service, store_dir)
@@ -123,10 +117,8 @@ def gmail_webhook():
     envelope = request.get_json()
     if not envelope:
         return 'Bad Request: No JSON payload received', 400
-
     if 'message' not in envelope:
         return 'Bad Request: No message field in JSON payload', 400
-
     message = envelope['message']
     if 'data' not in message:
         return 'Bad Request: No data field in message', 400
@@ -134,8 +126,6 @@ def gmail_webhook():
     # Decode the Pub/Sub message
     pubsub_message = base64.urlsafe_b64decode(message['data']).decode('utf-8')
     print(f'Received message: {pubsub_message}')
-
-    # Process the message (fetch new emails)
     fetch_emails()
 
     return 'OK', 200
